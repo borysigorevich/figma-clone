@@ -4,9 +4,14 @@ import { LiveCursors } from '@/components/cursor/LiveCursors';
 import FlyingReaction from '@/components/reaction/FlyingReaction';
 import ReactionSelector from '@/components/reaction/ReactionButton';
 import useInterval from '@/hooks/useInterval';
-import { CursorMode, CursorState, Reaction } from '@/types/type';
+import { CursorMode, CursorState, Reaction, ReactionEvent } from '@/types/type';
 import React, { PointerEvent, useCallback, useEffect, useState } from 'react';
-import { useMyPresence, useOthers } from '../../liveblocks.config';
+import {
+	useBroadcastEvent,
+	useEventListener,
+	useMyPresence,
+	useOthers,
+} from '../../liveblocks.config';
 
 type PresenceType = {
 	cursor: {
@@ -24,6 +29,13 @@ export const Live = () => {
 		mode: CursorMode.Hidden,
 	});
 	const [reactions, setReactions] = useState<Reaction[]>([]);
+	const broadcast = useBroadcastEvent();
+
+	useInterval(() => {
+		setReactions((reactions) =>
+			reactions.filter((reaction) => Date.now() - reaction.timestamp < 4000)
+		);
+	}, 1000);
 
 	useInterval(() => {
 		if (cursorState.mode === CursorMode.Reaction && cursorState.isPressed && cursor) {
@@ -37,7 +49,28 @@ export const Live = () => {
 				]);
 			});
 		}
+
+		if (cursorState.mode === CursorMode.Reaction) {
+			broadcast({
+				x: cursor?.x,
+				y: cursor?.y,
+				value: cursorState.reaction,
+			});
+		}
 	}, 100);
+
+	useEventListener((eventData) => {
+		const event = eventData.event as ReactionEvent;
+		setReactions((reactions) => {
+			return reactions.concat([
+				{
+					point: { x: event.x, y: event.y },
+					value: event.value,
+					timestamp: Date.now(),
+				},
+			]);
+		});
+	});
 
 	const handlePointerMove = useCallback((event: PointerEvent) => {
 		event.preventDefault();
@@ -104,7 +137,6 @@ export const Live = () => {
 			mode: CursorMode.Reaction,
 			isPressed: false,
 		});
-		console.log('reaction', reaction);
 	}, []);
 
 	useEffect(() => {
